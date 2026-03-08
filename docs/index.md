@@ -17,6 +17,7 @@
 | [Architecture Overview](architecture.md) | System design, component relationships, and data flow |
 | [API Reference](api-reference.md) | All public classes, methods, parameters, and return types |
 | [Examples](examples.md) | Practical recipes for common use cases |
+| [Project Review](project-review.md) | Assessment of feature coverage, usability, and novelty |
 
 ---
 

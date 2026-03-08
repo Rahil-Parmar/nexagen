@@ -168,6 +168,7 @@ Full documentation is in the [`docs/`](docs/) directory:
 - [Architecture Overview](docs/architecture.md) -- system design and data flow
 - [API Reference](docs/api-reference.md) -- all public classes and methods
 - [Examples](docs/examples.md) -- practical recipes
+- [Project Review](docs/project-review.md) -- feature, usability, and novelty assessment
 
 ---
 

@@ -210,19 +210,19 @@ async def test_scenario_tool_registry_availability():
 
 def test_scenario_supervisor_json_decisions():
     sup = SupervisorAgent.__new__(SupervisorAgent)
-    assert sup._parse_decision('{"decision": "continue"}') == "continue"
-    assert sup._parse_decision('{"decision": "stop"}') == "stop"
+    assert sup._parse_feedback('{"decision": "continue"}').decision == "continue"
+    assert sup._parse_feedback('{"decision": "stop"}').decision == "stop"
 
 
 def test_scenario_supervisor_text_fallback():
     sup = SupervisorAgent.__new__(SupervisorAgent)
-    assert sup._parse_decision("I think you should continue working") == "continue"
-    assert sup._parse_decision("Please stop, you are going in circles") == "stop"
+    assert sup._parse_feedback("I think you should continue working").decision == "continue"
+    assert sup._parse_feedback("Please stop, you are going in circles").decision == "stop"
 
 
 def test_scenario_supervisor_safe_default():
     sup = SupervisorAgent.__new__(SupervisorAgent)
-    assert sup._parse_decision("random gibberish xyz") == "stop"
+    assert sup._parse_feedback("random gibberish xyz").decision == "stop"
 
 
 # ── Scenario 8: Built-in tools ────────────────────────────────

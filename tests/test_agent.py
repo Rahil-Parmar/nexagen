@@ -266,3 +266,53 @@ class TestAgent:
         last_msg = messages[-1]
         assert "Stopping" in last_msg.text
         assert "supervisor" in last_msg.text.lower()
+
+
+class TestParallelExecution:
+    async def test_parallel_tool_calls(self):
+        """Multiple tool calls in one response execute in parallel."""
+        provider = MockProvider(
+            [
+                NexagenResponse(
+                    message=NexagenMessage(
+                        role="assistant",
+                        text="Adding both.",
+                        tool_calls=[
+                            ToolCall(id="tc1", name="add", arguments={"a": 1, "b": 2}),
+                            ToolCall(id="tc2", name="add", arguments={"a": 3, "b": 4}),
+                        ],
+                    )
+                ),
+                _text_response("Results are 3 and 7."),
+            ]
+        )
+        agent = Agent(provider=provider, custom_tools=[add_tool], permission_mode="full")
+        messages = []
+        async for msg in agent.run("Add 1+2 and 3+4"):
+            messages.append(msg)
+        tool_results = [m for m in messages if m.role == "tool"]
+        assert len(tool_results) == 2
+        outputs = {m.text for m in tool_results}
+        assert outputs == {"3", "7"}
+
+
+class TestAgentMemory:
+    async def test_episodic_memory_records_episodes(self):
+        """After a run, the agent records an episode in memory."""
+        provider = MockProvider([_text_response("Done.")])
+        agent = Agent(provider=provider, permission_mode="full")
+        async for _ in agent.run("Test task"):
+            pass
+        assert len(agent.memory._episodes) == 1
+        assert agent.memory._episodes[0].task == "Test task"
+        assert agent.memory._episodes[0].outcome == "success"
+
+    async def test_memory_persists_across_runs(self):
+        """Episodes accumulate across multiple run() calls."""
+        provider = MockProvider([_text_response("Done.")])
+        agent = Agent(provider=provider, permission_mode="full")
+        async for _ in agent.run("First task"):
+            pass
+        async for _ in agent.run("Second task"):
+            pass
+        assert len(agent.memory._episodes) == 2

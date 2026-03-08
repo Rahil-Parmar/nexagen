@@ -262,8 +262,8 @@ def test_conversation_handles_empty():
 def test_supervisor_handles_none_response():
     """Supervisor doesn't crash on None text."""
     sup = SupervisorAgent.__new__(SupervisorAgent)
-    assert sup._parse_decision("") == "stop"
-    assert sup._parse_decision(None or "") == "stop"
+    assert sup._parse_feedback("").decision == "stop"
+    assert sup._parse_feedback(None or "").decision == "stop"
 
 
 async def test_supervisor_check_progress_handles_crash():
@@ -271,7 +271,7 @@ async def test_supervisor_check_progress_handles_crash():
     failing = FailingProvider(fail_on=1, error=RuntimeError("boom"))
     sup = SupervisorAgent(failing)
     result = await sup.check_progress("task", [ActionEntry("step", ["tool"])])
-    assert result == "continue"  # non-fatal fallback
+    assert result.decision == "continue"  # non-fatal fallback
 
 
 async def test_supervisor_compress_handles_crash():

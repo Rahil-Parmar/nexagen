@@ -10,6 +10,12 @@ DEFAULT_PERMISSION_MODE = "safe"
 DEFAULT_MAX_ITERATIONS = 100  # max agent loop iterations to prevent runaway loops
 CHARS_PER_TOKEN = 4
 
+# --- Orchestration improvement defaults ---
+DEFAULT_MAX_REFLECTIONS = 2
+DEFAULT_MAX_EPISODES = 50
+DEFAULT_RECENT_TOOL_RESULTS_TO_KEEP = 3
+DEFAULT_MAX_PARALLEL_TOOLS = 10
+
 OPENAI_COMPAT_DEFAULT_URLS: dict[str, str] = {
     "ollama": "http://localhost:11434/v1",
     "vllm": "http://localhost:8000/v1",

@@ -4,9 +4,17 @@ from __future__ import annotations
 
 import json
 import re
+from dataclasses import dataclass
 
-from nexagen.models import NexagenMessage, NexagenResponse, ToolCall
+from nexagen.models import NexagenMessage
 from nexagen.providers.base import LLMProvider
+
+
+@dataclass
+class SupervisorFeedback:
+    decision: str  # "continue" | "stop" | "redirect"
+    diagnosis: str | None = None
+    suggestion: str | None = None
 
 
 class ActionEntry:
@@ -38,17 +46,33 @@ class SupervisorAgent:
             f"Original task: {original_task}\n\n"
             f"Actions taken so far:\n{log_text}\n\n"
             f"Is the agent making progress toward completing the original task?\n"
-            f'Respond with JSON: {{"decision": "continue"}} or {{"decision": "stop"}}'
+            f'Respond with JSON: {{"decision": "continue"}}, {{"decision": "stop"}}, '
+            f'or {{"decision": "redirect", "diagnosis": "what went wrong", "suggestion": "what to try instead"}}'
         )
 
-    def _parse_decision(self, response_text: str) -> str:
-        """Parse supervisor response. Try JSON first, fall back to text search, default to stop."""
+    def _parse_feedback(self, response_text: str) -> SupervisorFeedback:
+        """Parse supervisor response into structured feedback.
+
+        Try JSON first, fall back to text search, default to stop (safe).
+        """
+        valid_decisions = ("continue", "stop", "redirect")
+
+        def _feedback_from_data(data: dict) -> SupervisorFeedback | None:
+            decision = data.get("decision", "").lower()
+            if decision in valid_decisions:
+                return SupervisorFeedback(
+                    decision=decision,
+                    diagnosis=data.get("diagnosis"),
+                    suggestion=data.get("suggestion"),
+                )
+            return None
+
         # Try direct JSON parse
         try:
             data = json.loads(response_text)
-            decision = data.get("decision", "").lower()
-            if decision in ("continue", "stop"):
-                return decision
+            fb = _feedback_from_data(data)
+            if fb is not None:
+                return fb
         except (json.JSONDecodeError, AttributeError):
             pass
 
@@ -57,28 +81,28 @@ class SupervisorAgent:
         if json_match:
             try:
                 data = json.loads(json_match.group())
-                decision = data.get("decision", "").lower()
-                if decision in ("continue", "stop"):
-                    return decision
+                fb = _feedback_from_data(data)
+                if fb is not None:
+                    return fb
             except (json.JSONDecodeError, AttributeError):
                 pass
 
         # Fallback: text search
         text_lower = response_text.lower()
         if "continue" in text_lower:
-            return "continue"
+            return SupervisorFeedback(decision="continue")
         if "stop" in text_lower:
-            return "stop"
+            return SupervisorFeedback(decision="stop")
 
         # Default to stop (safe)
-        return "stop"
+        return SupervisorFeedback(decision="stop")
 
     async def check_progress(
         self, original_task: str, action_log: list[ActionEntry]
-    ) -> str:
-        """Returns 'continue' or 'stop'.
+    ) -> SupervisorFeedback:
+        """Returns a SupervisorFeedback with decision and optional diagnosis/suggestion.
 
-        If the supervisor LLM call fails, defaults to 'continue'
+        If the supervisor LLM call fails, defaults to continue
         (non-fatal — let the worker keep going).
         """
         try:
@@ -86,13 +110,13 @@ class SupervisorAgent:
             messages = [NexagenMessage(role="user", text=prompt)]
             response = await self.provider.chat(messages)
             text = response.message.text if response and response.message else ""
-            return self._parse_decision(text or "")
+            return self._parse_feedback(text or "")
         except Exception as e:
             import logging
             logging.getLogger("nexagen.supervisor").warning(
                 "Supervisor check_progress failed: %s. Defaulting to 'continue'.", e
             )
-            return "continue"
+            return SupervisorFeedback(decision="continue")
 
     def _build_compress_prompt(self, messages: list[NexagenMessage]) -> str:
         summaries = []

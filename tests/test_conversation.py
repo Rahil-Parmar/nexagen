@@ -7,6 +7,7 @@ import pytest
 from nexagen.conversation import Conversation
 from nexagen.models import NexagenMessage, ToolCall
 from nexagen.constants import CHARS_PER_TOKEN, DEFAULT_CONTEXT_THRESHOLD
+from nexagen.context import ContextManager
 
 
 class TestConversation:
@@ -128,3 +129,51 @@ class TestConversation:
         conv.clear()
         assert len(conv.messages) == 0
         assert len(conv.task_summaries) == 0
+
+
+class TestGetMessagesForLLM:
+    def test_returns_messages_without_mutation(self):
+        """get_messages_for_llm does not mutate the source list."""
+        conv = Conversation()
+        conv.add_message(NexagenMessage(role="user", text="hello"))
+        conv.add_message(NexagenMessage(role="tool", text="x" * 5000, tool_call_id="t1"))
+        conv.add_message(NexagenMessage(role="tool", text="recent", tool_call_id="t2"))
+
+        original_count = len(conv.messages)
+        cm = ContextManager(recent_tool_results_to_keep=1)
+        result = conv.get_messages_for_llm(
+            system_prompt="sys",
+            context_manager=cm,
+            context_window=200,
+        )
+        # Source messages unchanged
+        assert len(conv.messages) == original_count
+        assert conv.messages[1].text == "x" * 5000  # not masked
+
+    def test_without_context_manager_returns_raw(self):
+        """Without a context manager, returns raw messages (backward compat)."""
+        conv = Conversation()
+        conv.add_message(NexagenMessage(role="user", text="hello"))
+        result = conv.get_messages_for_llm(system_prompt="sys")
+        assert len(result) == 2  # system + user
+        assert result[0].role == "system"
+        assert result[1].text == "hello"
+
+    def test_includes_task_summaries(self):
+        """Task summaries from previous tasks are included."""
+        conv = Conversation()
+        conv.complete_task("Previous task done")
+        conv.add_message(NexagenMessage(role="user", text="new task"))
+        result = conv.get_messages_for_llm(system_prompt="sys")
+        assert len(result) == 3
+        assert result[1].summary == "Previous task done"
+
+    def test_append_only_messages_never_mutated(self):
+        """Adding messages never modifies existing entries."""
+        conv = Conversation()
+        msg1 = NexagenMessage(role="user", text="first")
+        conv.add_message(msg1)
+        msg2 = NexagenMessage(role="assistant", text="second")
+        conv.add_message(msg2)
+        assert conv.messages[0] is msg1
+        assert conv.messages[1] is msg2
